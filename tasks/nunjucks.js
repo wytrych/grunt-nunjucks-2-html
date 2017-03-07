@@ -39,8 +39,53 @@ module.exports = function (grunt) {
       grunt.log.error(`Template's data is empty. Guess you've forget to specify data option.`)
     }
 
+    const fs = require('fs')
+
     // Arm Nunjucks
-    const env = nunjucks.configure(options.paths, {
+    class MyLoader extends nunjucks.Loader {
+        getSource (filename) {
+            let path = ''
+            let finalFilename = filename
+            if (filename[0] !== '/') {
+                const splitPath = filename.split('/')
+                const moduleName = splitPath[0]
+                splitPath.shift()
+                finalFilename = splitPath.join('/')
+                const modulePath = require.resolve(moduleName).slice(0, -8)
+                path = modulePath + require(moduleName).templates
+            }
+            console.log(path + finalFilename);
+            const file = fs.readFileSync(path + finalFilename, 'utf8');
+            return {
+                src: file,
+                path: filename,
+            }
+        }
+
+        resolve (from, to) {
+            if (from[0] === '/') {
+                return path.resolve(path.dirname(from), to);
+            }
+
+            const splitPath = from.split('/')
+            const moduleName = splitPath[0]
+            splitPath.shift()
+            //finalFilename = splitPath.join('/')
+            const moduleDir = path.dirname(require.resolve(moduleName))
+            const finalPath = moduleDir + '/' + require(moduleName).templates
+
+            return path.resolve(finalPath, to);
+        }
+    }
+
+    class MyEnv extends nunjucks.Environment {
+        resolveTemplate () {
+            return super.resolveTemplate(...arguments)
+        }
+    }
+
+    const env = new MyEnv(new MyLoader(options.paths), {
+    //const env = nunjucks.configure(options.paths, {
       watch: false,
       autoescape: options.autoescape,
       throwOnUndefined: options.throwOnUndefined,
@@ -49,6 +94,8 @@ module.exports = function (grunt) {
       noCache: true,
       tags: options.tags
     })
+
+    //console.log(env);
 
     // Pass configuration to Nunjucks if specified
     if (typeof options.configureEnvironment === 'function') {
