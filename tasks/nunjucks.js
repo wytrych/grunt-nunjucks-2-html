@@ -11,6 +11,8 @@
 const nunjucks = require('nunjucks')
 const chalk = require('chalk')
 const path = require('path')
+const jsonfile = require('jsonfile')
+const fs = require('fs')
 
 module.exports = function (grunt) {
   grunt.registerMultiTask('nunjucks', `Renders Nunjucks' templates to HTML`, function () {
@@ -41,21 +43,29 @@ module.exports = function (grunt) {
 
     const fs = require('fs')
 
+    const modulesList = jsonfile.readFileSync('package.json').inc['template-modules'];
+    const modulesPaths = modulesList.map((moduleName) => require.resolve(moduleName));
+
+    console.log(path.dirname(modulesPaths));
+
     // Arm Nunjucks
     class MyLoader extends nunjucks.Loader {
         getSource (filename) {
-            let path = ''
             let finalFilename = filename
             if (filename[0] !== '/') {
-                const splitPath = filename.split('/')
-                const moduleName = splitPath[0]
-                splitPath.shift()
-                finalFilename = splitPath.join('/')
-                const modulePath = require.resolve(moduleName).slice(0, -8)
-                path = modulePath + require(moduleName).templates
+                for (let i = 0; i < modulesPaths.length; i++) {
+                    const dirname = path.dirname(modulesPaths[i]);
+                    let tryPath = `${dirname}/templates/${filename}`;
+                    if (fs.existsSync(tryPath)) {
+                        finalFilename = tryPath
+                        break;
+                    }
+                }
             }
-            console.log(path + finalFilename);
-            const file = fs.readFileSync(path + finalFilename, 'utf8');
+
+            console.log(finalFilename);
+
+            const file = fs.readFileSync(finalFilename, 'utf8');
             return {
                 src: file,
                 path: filename,
